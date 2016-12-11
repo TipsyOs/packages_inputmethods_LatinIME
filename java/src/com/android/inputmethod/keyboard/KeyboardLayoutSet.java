@@ -32,6 +32,7 @@ import android.view.inputmethod.InputMethodSubtype;
 
 import com.android.inputmethod.compat.EditorInfoCompatUtils;
 import com.android.inputmethod.compat.InputMethodSubtypeCompatUtils;
+import com.android.inputmethod.compat.UserManagerCompatUtils;
 import com.android.inputmethod.keyboard.internal.KeyboardBuilder;
 import com.android.inputmethod.keyboard.internal.KeyboardParams;
 import com.android.inputmethod.keyboard.internal.UniqueKeysCache;
@@ -74,6 +75,7 @@ public final class KeyboardLayoutSet {
     private final Context mContext;
     @Nonnull
     private final Params mParams;
+    private static boolean mLowerRightCornerIsEnterKey = false;
 
     // How many layouts we forcibly keep in cache. This only includes ALPHABET (default) and
     // ALPHABET_AUTOMATIC_SHIFTED layouts - other layouts may stay in memory in the map of
@@ -268,6 +270,8 @@ public final class KeyboardLayoutSet {
             mResources = context.getResources();
             final Params params = mParams;
 
+            mLowerRightCornerIsEnterKey = mResources.getBoolean(
+                    R.bool.lower_right_corner_is_enter);
             final EditorInfo editorInfo = (ei != null) ? ei : EMPTY_EDITOR_INFO;
             params.mMode = getKeyboardMode(editorInfo);
             // TODO: Consolidate those with {@link InputAttributes}.
@@ -275,6 +279,16 @@ public final class KeyboardLayoutSet {
             params.mIsPasswordField = InputTypeUtils.isPasswordInputType(editorInfo.inputType);
             params.mNoSettingsKey = InputAttributes.inPrivateImeOptions(
                     mPackageName, NO_SETTINGS_KEY, editorInfo);
+
+            // When the device is still unlocked, features like showing the IME setting app need to
+            // be locked down.
+            // TODO: Switch to {@code UserManagerCompat.isUserUnlocked()} in the support-v4 library
+            // when it becomes publicly available.
+            @UserManagerCompatUtils.LockState
+            final int lockState = UserManagerCompatUtils.getUserLockState(context);
+            if (lockState == UserManagerCompatUtils.LOCK_STATE_LOCKED) {
+                params.mNoSettingsKey = true;
+            }
         }
 
         public Builder setKeyboardGeometry(final int keyboardWidth, final int keyboardHeight) {
@@ -483,7 +497,8 @@ public final class KeyboardLayoutSet {
                 } else if (variation == InputType.TYPE_TEXT_VARIATION_URI) {
                     return KeyboardId.MODE_URL;
                 } else if (variation == InputType.TYPE_TEXT_VARIATION_SHORT_MESSAGE) {
-                    return KeyboardId.MODE_IM;
+                    return (mLowerRightCornerIsEnterKey ?
+                            KeyboardId.MODE_LOWER_RIGHT_CORNER_ENTER : KeyboardId.MODE_IM);
                 } else if (variation == InputType.TYPE_TEXT_VARIATION_FILTER) {
                     return KeyboardId.MODE_TEXT;
                 } else {
